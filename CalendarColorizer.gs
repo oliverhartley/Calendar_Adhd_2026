@@ -84,8 +84,9 @@ function colorizeCalendar() {
       targetColor = COLORS.FLAMINGO;
     }
     // Rule 2: Large/Hidden Guest List (Unanswered) -> Yellow (Banana)
-    // "The full guest list has been hidden..." -> attendeesOmitted: true
-    else if (event.attendeesOmitted && status === 'needsAction') {
+    // "The full guest list has been hidden..." usually implies guestsCanSeeOtherGuests is false
+    // OR attendeesOmitted is true.
+    else if ((event.guestsCanSeeOtherGuests === false || event.attendeesOmitted) && status === 'needsAction') {
       targetColor = COLORS.BANANA;
     }
     // Rule 3: Owner -> Green (Basil)
