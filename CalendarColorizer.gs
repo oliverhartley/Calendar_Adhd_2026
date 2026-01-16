@@ -97,6 +97,7 @@ function colorizeCalendar() {
 
   // --- 3. APPLY RULES ---
   let updatedCount = 0;
+  let deletedCount = 0;
 
   items.forEach(function(item) {
     if (item.start.date) return; // Skip all-day
@@ -114,6 +115,30 @@ function colorizeCalendar() {
       if (me) status = me.responseStatus;
     } else if (isOwner) {
       status = 'accepted';
+    }
+
+    // --- NIGHTLY CLEANER RULE ---
+    // If Declined (NO) AND Time is 20:00-07:00 -> DELETE
+    if (status === 'declined') {
+      const startTime = new Date(item.start.dateTime);
+      const hour = startTime.getHours(); // Local time as per script timezone
+      
+      // 8PM (20) to 7AM (7)
+      if (hour >= 20 || hour < 7) {
+        try {
+          // Use Standard API to delete
+          // Note: deleting an event where you are an attendee removes it from your calendar
+          const eventObject = calendar.getEventById(item.id);
+          if (eventObject) {
+            eventObject.deleteEvent();
+            deletedCount++;
+            console.log(`Deleted (Nightly Cleaner): "${title}" at ${hour}:00`);
+            return; // Stop processing this event
+          }
+        } catch (e) {
+          console.error(`Failed to delete "${title}": ${e.message}`);
+        }
+      }
     }
 
     let targetColor = "";
@@ -157,7 +182,8 @@ function colorizeCalendar() {
       }
     }
   });
+  
+  console.log(`Summary: ${updatedCount} updated, ${deletedCount} deleted.`);
 
-  console.log(`Total updated: ${updatedCount}`);
   console.timeEnd(SCRIPT_NAME);
 }
