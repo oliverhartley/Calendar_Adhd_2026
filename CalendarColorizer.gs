@@ -104,7 +104,7 @@ function colorizeCalendar() {
         // Construct Batch Request Entry
         batchRequests.push({
             method: 'PATCH',
-            endpoint: `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events/${event.id}`,
+            endpoint: `/calendar/v3/calendars/${CALENDAR_ID}/events/${event.id}`,
             body: { colorId: targetColor }
         });
         console.log(`Queue Update: "${title}" -> ${targetColor} (${isOwner ? 'Owner' : status})`);
