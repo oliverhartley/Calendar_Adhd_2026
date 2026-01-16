@@ -112,12 +112,11 @@ function colorizeCalendar() {
       ruleMatched = "Admin/Personal";
     }
 
-    // 6. OWNER/HOST -> Basil (Rule: "Meetings You Own")
-    //    Constraint: Must have attendees to be a "Meeting". 
-    //    Overrides "Large Team" because if you own it, you are leading it (High Energy).
-    else if (isOwner && attendeeCount > 0) {
+    // 6. OWNER/HOST -> Basil (Rule: "Meetings You Own" + "Solo Work")
+    //    Applies to ANY event you own (that wasn't caught by Focus/Admin/Buffer rules above).
+    else if (isOwner) {
       targetColor = COLORS.BASIL;
-      ruleMatched = "Owner (Leading)";
+      ruleMatched = "Owner (General)";
     }
 
     // 7. MAYBE -> Banana vs Lavender (Rule: "Small Group" vs "Global")
@@ -145,10 +144,11 @@ function colorizeCalendar() {
       ruleMatched = "Standard Meeting";
     }
 
-    // 10. FALLBACK: SOLO TASKS (Owner, 0 Attendees) -> Peacock/Default
+    // 10. FALLBACK: SOLO TASKS (Owner, 0 Attendees) -> Basil (Unified with Owner Rule)
+    //    (This is technically unreachable now if Rule 6 catches all owners, but keeping as safe default if logic shifts)
     else if (isOwner && attendeeCount === 0) {
-      targetColor = COLORS.PEACOCK; 
-      ruleMatched = "Solo Task (General)";
+      targetColor = COLORS.BASIL; 
+      ruleMatched = "Solo Task (Owner)";
     }
 
     // --- APPLY CHANGES ---
