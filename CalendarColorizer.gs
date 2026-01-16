@@ -15,8 +15,9 @@ function colorizeCalendar() {
   const DAYS_TO_LOOK_AHEAD = 7; 
 
   const COLORS = {
-    BASIL: '10', // Green (Owner)
-    SAGE: '2'    // Light Green (Accepted)
+    BASIL: '10',    // Green (Owner)
+    SAGE: '2',      // Light Green (Accepted)
+    FLAMINGO: '4'   // Light Red (Declined)
   };
 
   const calendar = CalendarApp.getDefaultCalendar();
@@ -39,12 +40,16 @@ function colorizeCalendar() {
     const status = event.getMyStatus();
     let targetColor = "";
     
-    // Rule 1: Owner -> Green (Basil)
-    if (event.isOwnedByMe()) {
+    // Rule 1: Declined -> Light Red (Flamingo)
+    // (Priority: If I said NO, it should look declined regardless of other factors)
+    if (status === CalendarApp.GuestStatus.NO) {
+      targetColor = COLORS.FLAMINGO;
+    }
+    // Rule 2: Owner -> Green (Basil)
+    else if (event.isOwnedByMe()) {
       targetColor = COLORS.BASIL;
     }
-    // Rule 2: Accepted (Yes) -> Light Green (Sage)
-    // (Only if not already caught by Owner rule)
+    // Rule 3: Accepted (Yes) -> Light Green (Sage)
     else if (status === CalendarApp.GuestStatus.YES) {
       targetColor = COLORS.SAGE;
     }
@@ -58,7 +63,7 @@ function colorizeCalendar() {
         try {
           event.setColor(targetColor);
           updatedCount++;
-          console.log(`Updated: "${event.getTitle()}" -> ${targetColor === COLORS.BASIL ? 'Green' : 'Light Green'}`);
+          console.log(`Updated: "${event.getTitle()}" -> ${targetColor === COLORS.BASIL ? 'Green' : (targetColor === COLORS.SAGE ? 'Light Green' : 'Light Red')}`);
         } catch (e) {
           console.error(`Error updating "${event.getTitle()}": ${e.message}`);
         }
