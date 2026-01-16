@@ -19,7 +19,8 @@ function colorizeCalendar() {
   const COLORS = {
     BASIL: '10',    // Green (Owner)
     SAGE: '2',      // Light Green (Accepted)
-    FLAMINGO: '4'   // Light Red (Declined)
+    FLAMINGO: '4',  // Light Red (Declined)
+    BANANA: '5'     // Yellow (Large/Unanswered)
   };
 
   // --- 1. FETCH EVENTS (API v3) ---
@@ -82,11 +83,16 @@ function colorizeCalendar() {
     if (status === 'declined') {
       targetColor = COLORS.FLAMINGO;
     }
-    // Rule 2: Owner -> Green (Basil)
+    // Rule 2: Large/Hidden Guest List (Unanswered) -> Yellow (Banana)
+    // "The full guest list has been hidden..." -> attendeesOmitted: true
+    else if (event.attendeesOmitted && status === 'needsAction') {
+      targetColor = COLORS.BANANA;
+    }
+    // Rule 3: Owner -> Green (Basil)
     else if (isOwner) {
       targetColor = COLORS.BASIL;
     }
-    // Rule 3: Accepted (Yes) -> Light Green (Sage)
+    // Rule 4: Accepted (Yes) -> Light Green (Sage)
     else if (status === 'accepted') {
       targetColor = COLORS.SAGE;
     }
