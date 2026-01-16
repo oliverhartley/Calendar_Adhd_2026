@@ -11,8 +11,8 @@ function colorizeCalendar() {
   console.time(SCRIPT_NAME);
 
   // --- CONFIGURATION ---
-  const DAYS_TO_LOOK_BACK = 1; 
-  const DAYS_TO_LOOK_AHEAD = 2; 
+  const DAYS_TO_LOOK_BACK = 7; 
+  const DAYS_TO_LOOK_AHEAD = 7; 
 
   const COLORS = {
     BASIL: '10' // Green
