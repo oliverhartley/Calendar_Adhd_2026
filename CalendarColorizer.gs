@@ -20,7 +20,8 @@ function colorizeCalendar() {
     BASIL: '10',    // Green (Owner)
     SAGE: '2',      // Light Green (Accepted)
     FLAMINGO: '4',  // Light Red (Declined)
-    LAVENDER: '1'   // Lavender (Large/Unanswered)
+    LAVENDER: '1',  // Lavender (Large/Unanswered)
+    GRAPHITE: '8'   // Gray (Conflict)
   };
 
   const calendar = CalendarApp.getDefaultCalendar();
@@ -33,15 +34,6 @@ function colorizeCalendar() {
   endDate.setDate(now.getDate() + DAYS_TO_LOOK_AHEAD);
 
   console.log(`Scanning from ${startDate.toDateString()} to ${endDate.toDateString()}`);
-  
-  // Use Standard CalendarApp Service (Slower but 100% reliable)
-  const events = calendar.getEvents(startDate, endDate);
-  let updatedCount = 0;
-
-  // REVISED PLAN FOR RELIABILITY:
-  // Use `Calendar.Events.list` to get the data (including `guestsCanSeeOtherGuests`).
-  // Loop through items.
-  // If update needed -> `calendar.getEventById(item.id).setColor(color)`.
   
   const optionalArgs = {
     timeMin: startDate.toISOString(),
@@ -61,7 +53,49 @@ function colorizeCalendar() {
   }
   
   console.log(`Found ${items.length} events.`);
+
+  // --- 2. DETECT CONFLICTS (Pre-calc) ---
   const myEmail = Session.getActiveUser().getEmail();
+  const conflictingIds = new Set();
+  
+  // Create a sub-list of "Busy" events (Not Declined)
+  // We use this list to find overlaps.
+  const busyEvents = items.filter(item => {
+    if (!item.start.dateTime) return false; // Skip all-day
+    let myStatus = 'needsAction';
+    if (item.attendees) {
+      const me = item.attendees.find(a => a.email === myEmail || a.self);
+      if (me) myStatus = me.responseStatus;
+    }
+    // Consider it "Busy" if I haven't explicitly declined
+    return myStatus !== 'declined';
+  });
+
+  // Sort by start time (API usually does this, but ensure)
+  busyEvents.sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime));
+
+  // Find overlaps
+  for (let i = 0; i < busyEvents.length; i++) {
+    const current = busyEvents[i];
+    const currentStart = new Date(current.start.dateTime).getTime();
+    const currentEnd = new Date(current.end.dateTime).getTime();
+
+    for (let j = i + 1; j < busyEvents.length; j++) {
+      const next = busyEvents[j];
+      const nextStart = new Date(next.start.dateTime).getTime();
+
+      // If next starts after current ends, no overlap possible (sorted)
+      if (nextStart >= currentEnd) break;
+
+      // Overlap Found
+      conflictingIds.add(current.id);
+      conflictingIds.add(next.id);
+    }
+  }
+  console.log(`Found ${conflictingIds.size} events involved in conflicts.`);
+
+  // --- 3. APPLY RULES ---
+  let updatedCount = 0;
 
   items.forEach(function(item) {
     if (item.start.date) return; // Skip all-day
@@ -87,15 +121,21 @@ function colorizeCalendar() {
     if (status === 'declined') {
       targetColor = COLORS.FLAMINGO;
     }
-    // Rule 2: Large/Hidden Guest List (Unanswered) -> Lavender
+    // Rule 2: Conflict (Unanswered) -> Graphite (Gray)
+    // "Mark as graphite the ones with conflict that i have not answerd"
+    // Priority: Higher than Large/Owner? Yes, conflict is a warning.
+    else if (conflictingIds.has(item.id) && status === 'needsAction') {
+      targetColor = COLORS.GRAPHITE;
+    }
+    // Rule 3: Large/Hidden Guest List (Unanswered) -> Lavender
     else if ((item.guestsCanSeeOtherGuests === false || item.attendeesOmitted) && status === 'needsAction') {
       targetColor = COLORS.LAVENDER;
     }
-    // Rule 3: Owner -> Green (Basil)
+    // Rule 4: Owner -> Green (Basil)
     else if (isOwner) {
       targetColor = COLORS.BASIL;
     }
-    // Rule 4: Accepted (Yes) -> Light Green (Sage)
+    // Rule 5: Accepted (Yes) -> Light Green (Sage)
     else if (status === 'accepted') {
       targetColor = COLORS.SAGE;
     }
@@ -103,8 +143,6 @@ function colorizeCalendar() {
     // Apply Update (Slow/Standard Method)
     if (targetColor && item.colorId !== targetColor) {
       try {
-        // Fetch the Object wrapper to call .setColor()
-        // Note: .getEventById() is reliable.
         const eventObject = calendar.getEventById(item.id);
         if (eventObject) {
            eventObject.setColor(targetColor);
