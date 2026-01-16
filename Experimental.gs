@@ -1,11 +1,10 @@
 /**
- * Experimental: Mark Conflicting Events
+ * Experimental: Mark Conflicting Events (Unanswered Only)
  * 
  * Logic:
- * 1. Find all "Accepted" or "Owner" events.
- * 2. Sort by Start Time.
- * 3. Identify overlaps (Double bookings).
- * 4. Color overlapping events GRAPHITE (Gray).
+ * 1. Consider ALL non-declined events as identifying "Busy Time".
+ * 2. Identify overlaps.
+ * 3. If an event overlaps AND is "Unanswered" (needsAction) -> Color it GRAPHITE.
  */
 function markConflicts() {
   const SCRIPT_NAME = 'Conflict Detector';
@@ -26,31 +25,32 @@ function markConflicts() {
 
   console.log(`Scanning for conflicts from ${startDate.toDateString()} to ${endDate.toDateString()}...`);
 
-  // 1. Fetch Candidates (Standard API is fine for this)
+  // 1. Fetch Candidates (Standard API)
   const allEvents = calendar.getEvents(startDate, endDate);
+  const myEmail = Session.getActiveUser().getEmail();
   
-  // 2. Filter for Active Events (Accepted or Owned)
-  const activeEvents = allEvents.filter(function(e) {
+  // 2. Filter for "Time Blockers" (Anything NOT Declined)
+  // We need to know who is "blocking" the slot.
+  const validEvents = allEvents.filter(function(e) {
     if (e.isAllDayEvent()) return false;
     const status = e.getMyStatus();
-    // GuestStatus.YES or OWNER (and usually OWNER implies YES unless explicitly NO, but let's stick to API)
-    return status === CalendarApp.GuestStatus.YES || status === CalendarApp.GuestStatus.OWNER;
+    return status !== CalendarApp.GuestStatus.NO;
   });
 
   // 3. Sort by Start Time
-  activeEvents.sort((a, b) => a.getStartTime().getTime() - b.getStartTime().getTime());
+  validEvents.sort((a, b) => a.getStartTime().getTime() - b.getStartTime().getTime());
 
   const conflictingEventIds = new Set();
 
   // 4. Detect Overlaps
-  for (let i = 0; i < activeEvents.length; i++) {
-    const current = activeEvents[i];
+  for (let i = 0; i < validEvents.length; i++) {
+    const current = validEvents[i];
     const currentStart = current.getStartTime().getTime();
     const currentEnd = current.getEndTime().getTime();
 
     // Look ahead for overlaps
-    for (let j = i + 1; j < activeEvents.length; j++) {
-      const next = activeEvents[j];
+    for (let j = i + 1; j < validEvents.length; j++) {
+      const next = validEvents[j];
       const nextStart = next.getStartTime().getTime();
 
       // If next event starts after current ends, no overlap possible (due to sorting)
@@ -60,28 +60,35 @@ function markConflicts() {
       conflictingEventIds.add(current.getId());
       conflictingEventIds.add(next.getId());
       
-      console.log(`Conflict found: "${current.getTitle()}" vs "${next.getTitle()}"`);
+      // console.log(`Conflict: "${current.getTitle()}" vs "${next.getTitle()}"`);
     }
   }
 
-  console.log(`Found ${conflictingEventIds.size} conflicting events.`);
+  console.log(`Found ${conflictingEventIds.size} events involved in conflicts.`);
 
-  // 5. Apply Color
+  // 5. Apply Color ONLY to "needsAction" events
   let updatedCount = 0;
-  activeEvents.forEach(function(e) {
+  validEvents.forEach(function(e) {
+    // Check if it is involved in a conflict
     if (conflictingEventIds.has(e.getId())) {
-      if (e.getColor() !== COLORS.GRAPHITE) {
-        try {
-          e.setColor(COLORS.GRAPHITE);
-          updatedCount++;
-          console.log(`Marked as Conflict (Gray): "${e.getTitle()}"`);
-        } catch (err) {
-          console.error(`Failed to update "${e.getTitle()}": ${err.message}`);
+      const status = e.getMyStatus();
+      
+      // TARGET: Only 'needsAction' (INVITED)
+      // Note: getMyStatus() returns 'INVITED' for needsAction usually, or 'YES'/'NO'/'MAYBE'/'OWNER'
+      if (status === CalendarApp.GuestStatus.INVITED) { 
+        if (e.getColor() !== COLORS.GRAPHITE) {
+          try {
+            e.setColor(COLORS.GRAPHITE);
+            updatedCount++;
+            console.log(`Marked Conflict (Unanswered): "${e.getTitle()}"`);
+          } catch (err) {
+            console.error(`Failed to update "${e.getTitle()}": ${err.message}`);
+          }
         }
       }
     }
   });
 
-  console.log(`Updated ${updatedCount} events to Graphite.`);
+  console.log(`Updated ${updatedCount} unanswered conflicting events.`);
   console.timeEnd(SCRIPT_NAME);
 }
