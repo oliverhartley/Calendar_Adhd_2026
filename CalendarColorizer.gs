@@ -15,7 +15,8 @@ function colorizeCalendar() {
   const DAYS_TO_LOOK_AHEAD = 7; 
 
   const COLORS = {
-    BASIL: '10' // Green
+    BASIL: '10', // Green (Owner)
+    SAGE: '2'    // Light Green (Accepted)
   };
 
   const calendar = CalendarApp.getDefaultCalendar();
@@ -35,17 +36,29 @@ function colorizeCalendar() {
   events.forEach(function(event) {
     if (event.isAllDayEvent()) return;
 
-    // Rule: Owner = Green
+    const status = event.getMyStatus();
+    let targetColor = "";
+    
+    // Rule 1: Owner -> Green (Basil)
     if (event.isOwnedByMe()) {
-      const currentColor = event.getColor();
-      const targetColor = COLORS.BASIL;
+      targetColor = COLORS.BASIL;
+    }
+    // Rule 2: Accepted (Yes) -> Light Green (Sage)
+    // (Only if not already caught by Owner rule)
+    else if (status === CalendarApp.GuestStatus.YES) {
+      targetColor = COLORS.SAGE;
+    }
 
-      // Only update if not already green to save API quota
+    // Apply Change if needed
+    if (targetColor) {
+      const currentColor = event.getColor();
+      
+      // Only update if not matching target to save API quota
       if (currentColor !== targetColor) {
         try {
           event.setColor(targetColor);
           updatedCount++;
-          console.log(`Updated: "${event.getTitle()}" -> Green`);
+          console.log(`Updated: "${event.getTitle()}" -> ${targetColor === COLORS.BASIL ? 'Green' : 'Light Green'}`);
         } catch (e) {
           console.error(`Error updating "${event.getTitle()}": ${e.message}`);
         }
