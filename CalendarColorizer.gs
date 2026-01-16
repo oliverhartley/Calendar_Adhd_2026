@@ -21,7 +21,8 @@ function colorizeCalendar() {
     SAGE: '2',      // Light Green (Accepted)
     FLAMINGO: '4',  // Light Red (Declined)
     LAVENDER: '1',  // Lavender (Large/Unanswered)
-    GRAPHITE: '8'   // Gray (Conflict)
+    GRAPHITE: '8',  // Gray (Conflict)
+    BANANA: '5'     // Yellow (Maybe)
   };
 
   const calendar = CalendarApp.getDefaultCalendar();
@@ -122,20 +123,22 @@ function colorizeCalendar() {
       targetColor = COLORS.FLAMINGO;
     }
     // Rule 2: Conflict (Unanswered) -> Graphite (Gray)
-    // "Mark as graphite the ones with conflict that i have not answerd"
-    // Priority: Higher than Large/Owner? Yes, conflict is a warning.
     else if (conflictingIds.has(item.id) && status === 'needsAction') {
       targetColor = COLORS.GRAPHITE;
     }
-    // Rule 3: Large/Hidden Guest List (Unanswered) -> Lavender
+    // Rule 3: Maybe (Tentative) -> Banana (Yellow)
+    else if (status === 'tentative') {
+      targetColor = COLORS.BANANA;
+    }
+    // Rule 4: Large/Hidden Guest List (Unanswered) -> Lavender
     else if ((item.guestsCanSeeOtherGuests === false || item.attendeesOmitted) && status === 'needsAction') {
       targetColor = COLORS.LAVENDER;
     }
-    // Rule 4: Owner -> Green (Basil)
+    // Rule 5: Owner -> Green (Basil)
     else if (isOwner) {
       targetColor = COLORS.BASIL;
     }
-    // Rule 5: Accepted (Yes) -> Light Green (Sage)
+    // Rule 6: Accepted (Yes) -> Light Green (Sage)
     else if (status === 'accepted') {
       targetColor = COLORS.SAGE;
     }
