@@ -88,9 +88,9 @@ function colorizeCalendar() {
       ruleMatched = "Declined";
     }
     
-    // 2. FOCUS TIME -> Grape (Rule: "High-Focus & Individual Work")
+    // 2. FOCUS TIME -> Sage (Rule: "High-Focus & Individual Work")
     else if (matchesAny(title, KEYWORDS.FOCUS)) {
-      targetColor = COLORS.GRAPE;
+      targetColor = COLORS.SAGE;
       ruleMatched = "Focus Time";
     }
     
@@ -112,11 +112,11 @@ function colorizeCalendar() {
       ruleMatched = "Admin/Personal";
     }
 
-    // 6. OWNER/HOST -> Tomato (Rule: "Meetings You Own")
+    // 6. OWNER/HOST -> Basil (Rule: "Meetings You Own")
     //    Constraint: Must have attendees to be a "Meeting". 
     //    Overrides "Large Team" because if you own it, you are leading it (High Energy).
     else if (isOwner && attendeeCount > 0) {
-      targetColor = COLORS.TOMATO;
+      targetColor = COLORS.BASIL;
       ruleMatched = "Owner (Leading)";
     }
 
