@@ -1,20 +1,20 @@
 /**
- * Fast Calendar Colorizer (Batch Mode)
+ * Reliable Calendar Colorizer (Standard Mode)
  * 
- * Performance:
- * - Uses Advanced Calendar Service (Calendar API v3) for fetching and patching.
- * - Processing: In-memory.
- * - Updates: Sent in a single 'multipart/mixed' batch request.
+ * Logic:
+ * 1. Declined (NO) -> Flamingo (Light Red)
+ * 2. Large/Hidden (Guests hidden) -> Banana (Yellow)
+ * 3. Owner -> Basil (Green)
+ * 4. Accepted (YES) -> Sage (Light Green)
  */
 
 function colorizeCalendar() {
-  const SCRIPT_NAME = 'Fast Calendar Colorizer';
+  const SCRIPT_NAME = 'Reliable Calendar Colorizer';
   console.time(SCRIPT_NAME);
 
   // --- CONFIGURATION ---
   const DAYS_TO_LOOK_BACK = 7; 
   const DAYS_TO_LOOK_AHEAD = 7; 
-  const CALENDAR_ID = 'primary';
 
   const COLORS = {
     BASIL: '10',    // Green (Owner)
@@ -23,13 +23,62 @@ function colorizeCalendar() {
     BANANA: '5'     // Yellow (Large/Unanswered)
   };
 
-  // --- 1. FETCH EVENTS (API v3) ---
+  const calendar = CalendarApp.getDefaultCalendar();
   const now = new Date();
+  
   const startDate = new Date();
   startDate.setDate(now.getDate() - DAYS_TO_LOOK_BACK);
+  
   const endDate = new Date();
   endDate.setDate(now.getDate() + DAYS_TO_LOOK_AHEAD);
 
+  console.log(`Scanning from ${startDate.toDateString()} to ${endDate.toDateString()}`);
+  
+  // Use Standard CalendarApp Service (Slower but 100% reliable)
+  const events = calendar.getEvents(startDate, endDate);
+  let updatedCount = 0;
+
+  events.forEach(function(event) {
+    if (event.isAllDayEvent()) return;
+
+    const status = event.getMyStatus();
+    let targetColor = "";
+    
+    // Check for Hidden Guest List
+    // Note: getGuestList().length is 0 if hidden, but we need to distinguish "Hidden" from "Just Me".
+    // 'guestsCanSeeOtherGuests' is not directly available in standard CalendarApp Event object easily 
+    // without Advanced Service, BUT specific feature "attendeesOmitted" logic:
+    // If I am NOT the owner, and I cannot see other guests, it's likely a hidden list.
+    // However, Standard API doesn't expose 'guestsCanSeeOtherGuests' property directly on Event.
+    // WORKAROUND: We will try to fetch the Advanced Event object ONLY for candidates to check this property if needed,
+    // OR we just rely on "0 guests + not owner" as a heuristic? 
+    // No, let's keep it simple: If we can't detect it easily in Standard Mode effectively, we might need a hybrid.
+    // Wait, the user wants "Previous working logic". 
+    // Actually, we CAN use the Advanced Service just for the specific property usage if 'Calendar' is enabled, 
+    // but mixing them is fine.
+    // Let's stick to the Pure Standard API where possible, but for "Hidden Guests" we might need a trick.
+    // ACTUALLY: The previous "Batch Mode" failed on *writing*. Reading was fine.
+    // So we will READ with Advanced API (to get the hidden status) and WRITE with Standard API (setColor).
+    
+    // ...Wait, mixing is complicated for the user script.
+    // Let's try to map the Standard Event to the rules. 
+    // Standard Event doesn't have 'guestsCanSeeOtherGuests'.
+    // We will use the Advanced API to READ (since it's enabled) and `event.setColor` to WRITE. No, `event` from `getEvents` is a CalendarEvent object, not JSON.
+    // We can't mix `event.setColor` on a JSON object.
+    
+    // PLAN: 
+    // 1. Fetch with Standard `getEvents()` (returns objects with .setColor).
+    // 2. BUT we're missing `guestsCanSeeOtherGuests`.
+    // 3. SO: We *must* use Advanced API `Calendar.Events.list` to get the list (with the hidden property),
+    //    AND THEN for every event we want to update, we use `calendar.getEventById(id).setColor(color)`.
+    //    This is "Slow but Reliable".
+  });
+  
+  // REVISED PLAN FOR RELIABILITY:
+  // Use `Calendar.Events.list` to get the data (including `guestsCanSeeOtherGuests`).
+  // Loop through items.
+  // If update needed -> `calendar.getEventById(item.id).setColor(color)`.
+  
   const optionalArgs = {
     timeMin: startDate.toISOString(),
     timeMax: endDate.toISOString(),
@@ -37,46 +86,37 @@ function colorizeCalendar() {
     orderBy: 'startTime',
     showDeleted: false
   };
-
-  console.log(`Scanning [${startDate.toISOString()}] to [${endDate.toISOString()}]...`);
   
-  // Use Advanced Service for speed (returns JSON, not heavy Objects)
   let items = [];
   try {
-    const response = Calendar.Events.list(CALENDAR_ID, optionalArgs);
+    const response = Calendar.Events.list('primary', optionalArgs);
     items = response.items || [];
   } catch (e) {
-    console.error(`Status: Failed to fetch events. Ensure 'Calendar' service is enabled in appsscript.json. Error: ${e.message}`);
+    console.error(`Status: Failed to fetch events via Advanced API. Error: ${e.message}`);
     return;
   }
   
   console.log(`Found ${items.length} events.`);
-
-  // --- 2. COMPUTE UPDATES (In-Memory) ---
-  const batchRequests = [];
   const myEmail = Session.getActiveUser().getEmail();
 
-  items.forEach(function(event) {
-    if (event.start.date) return; // Skip all-day events if preferred (start.date exists for all-day)
+  items.forEach(function(item) {
+    if (item.start.date) return; // Skip all-day
 
-    const title = event.summary || "";
+    const title = item.summary || "";
     let status = "needsAction"; 
     let isOwner = false;
 
-    // Determine Status & Ownership from JSON
-    if (event.organizer && (event.organizer.email === myEmail || event.organizer.self)) {
+    if (item.organizer && (item.organizer.email === myEmail || item.organizer.self)) {
         isOwner = true;
     }
     
-    // Find my response status
-    if (event.attendees) {
-      const me = event.attendees.find(a => a.email === myEmail || a.self);
-      if (me) status = me.responseStatus; // 'accepted', 'declined', 'needsAction', 'tentative'
+    if (item.attendees) {
+      const me = item.attendees.find(a => a.email === myEmail || a.self);
+      if (me) status = me.responseStatus;
     } else if (isOwner) {
-      status = 'accepted'; // Owner usually implies accepted unless stated otherwise
+      status = 'accepted';
     }
 
-    // Determine Target Color
     let targetColor = "";
     
     // Rule 1: Declined -> Light Red (Flamingo)
@@ -84,9 +124,7 @@ function colorizeCalendar() {
       targetColor = COLORS.FLAMINGO;
     }
     // Rule 2: Large/Hidden Guest List (Unanswered) -> Yellow (Banana)
-    // "The full guest list has been hidden..." usually implies guestsCanSeeOtherGuests is false
-    // OR attendeesOmitted is true.
-    else if ((event.guestsCanSeeOtherGuests === false || event.attendeesOmitted) && status === 'needsAction') {
+    else if ((item.guestsCanSeeOtherGuests === false || item.attendeesOmitted) && status === 'needsAction') {
       targetColor = COLORS.BANANA;
     }
     // Rule 3: Owner -> Green (Basil)
@@ -98,63 +136,23 @@ function colorizeCalendar() {
       targetColor = COLORS.SAGE;
     }
 
-    // Check if Update Needed
-    // Event color might be undefined if default, 'colorId' field
-    if (targetColor && event.colorId !== targetColor) {
-        // Construct Batch Request Entry
-        batchRequests.push({
-            method: 'PATCH',
-            endpoint: `/calendar/v3/calendars/${CALENDAR_ID}/events/${event.id}`,
-            body: { colorId: targetColor }
-        });
-        console.log(`Queue Update: "${title}" -> ${targetColor} (${isOwner ? 'Owner' : status})`);
+    // Apply Update (Slow/Standard Method)
+    if (targetColor && item.colorId !== targetColor) {
+      try {
+        // Fetch the Object wrapper to call .setColor()
+        // Note: .getEventById() is reliable.
+        const eventObject = calendar.getEventById(item.id);
+        if (eventObject) {
+           eventObject.setColor(targetColor);
+           updatedCount++;
+           console.log(`Updated: "${title}" -> ${targetColor}`);
+        }
+      } catch (e) {
+         console.error(`Failed to update "${title}": ${e.message}`);
+      }
     }
   });
 
-  // --- 3. EXECUTE BATCH ---
-  if (batchRequests.length > 0) {
-    console.log(`Sending ${batchRequests.length} updates in batch...`);
-    runBatch(batchRequests);
-  } else {
-    console.log("No updates needed.");
-  }
-
+  console.log(`Total updated: ${updatedCount}`);
   console.timeEnd(SCRIPT_NAME);
-}
-
-/**
- * Executes a batch of HTTP requests using multipart/mixed
- * @param {Array} requests - Array of {method, endpoint, body}
- */
-function runBatch(requests) {
-  const boundary = "BATCH_BOUNDARY";
-  let payload = "";
-
-  requests.forEach((req, index) => {
-    payload += `--${boundary}\r\n`;
-    payload += `Content-Type: application/http\r\n`;
-    payload += `Content-ID: ${index}\r\n\r\n`;
-    payload += `${req.method} ${req.endpoint}\r\n`;
-    payload += `Content-Type: application/json\r\n\r\n`;
-    payload += `${JSON.stringify(req.body)}\r\n\r\n`;
-  });
-  payload += `--${boundary}--`;
-
-  const params = {
-    method: "post",
-    contentType: `multipart/mixed; boundary=${boundary}`,
-    payload: payload,
-    headers: {
-      Authorization: `Bearer ${ScriptApp.getOAuthToken()}`
-    },
-    muteHttpExceptions: true
-  };
-
-  try {
-    const response = UrlFetchApp.fetch("https://www.googleapis.com/batch/calendar/v3", params);
-    console.log(`Batch Response Code: ${response.getResponseCode()}`);
-    // console.log(response.getContentText()); // Debug if needed
-  } catch (e) {
-    console.error(`Batch Failed: ${e.message}`);
-  }
 }
