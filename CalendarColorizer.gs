@@ -15,7 +15,8 @@ function colorizeCalendar() {
   console.time(SCRIPT_NAME);
 
   // --- CONFIGURATION ---
-  const DAYS_TO_LOOK_AHEAD = 30; // Processing window
+  const DAYS_TO_LOOK_BACK = 7; // Days in the past to process
+  const DAYS_TO_LOOK_AHEAD = 60; // Days in the future to process
   const LARGE_MEETING_THRESHOLD = 8; // Attendees > this count as "Large/Global"
   
   // Keywords to identify specific event types (case-insensitive)
@@ -46,13 +47,17 @@ function colorizeCalendar() {
 
   const calendar = CalendarApp.getDefaultCalendar();
   const now = new Date();
+  
+  const startDate = new Date();
+  startDate.setDate(now.getDate() - DAYS_TO_LOOK_BACK);
+  
   const endDate = new Date();
   endDate.setDate(now.getDate() + DAYS_TO_LOOK_AHEAD);
 
   // Fetch events
-  const events = calendar.getEvents(now, endDate);
+  const events = calendar.getEvents(startDate, endDate);
   
-  console.log(`Found ${events.length} events from ${now.toDateString()} to ${endDate.toDateString()}`);
+  console.log(`Found ${events.length} events from ${startDate.toDateString()} to ${endDate.toDateString()}`);
 
   var stats = {
     total: events.length,
