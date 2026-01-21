@@ -127,7 +127,6 @@ function colorizeCalendar() {
       if (hour >= 20 || hour < 7) {
         try {
           // Use Standard API to delete
-          // Note: deleting an event where you are an attendee removes it from your calendar
           const eventObject = calendar.getEventById(item.id);
           if (eventObject) {
             eventObject.deleteEvent();
@@ -141,6 +140,7 @@ function colorizeCalendar() {
       }
     }
 
+    // --- DETERMINE TARGET COLOR ---
     let targetColor = "";
     
     // Rule 1: Declined -> Light Red (Flamingo)
@@ -168,17 +168,41 @@ function colorizeCalendar() {
       targetColor = COLORS.SAGE;
     }
 
-    // Apply Update (Slow/Standard Method)
-    if (targetColor && item.colorId !== targetColor) {
+    // If no rule matched, skip
+    if (!targetColor) return;
+
+    // --- CHECK FOR USER OVERRIDE ---
+    // Check if we previously colored this event
+    const extendedProps = item.extendedProperties && item.extendedProperties.private;
+    const lastAutoColor = extendedProps ? extendedProps['last_auto_color'] : null;
+    const currentColor = item.colorId;
+
+    // Logic:
+    // 1. If we have a record of the last color we set (lastAutoColor)...
+    // 2. AND the current color is DIFFERENT from that last auto color...
+    // 3. THEN the user must have manually changed it. Do not touch.
+    if (lastAutoColor && currentColor && lastAutoColor !== currentColor) {
+      console.log(`Skipped (User Override): "${title}" (User set ${currentColor}, we wanted ${targetColor})`);
+      return;
+    }
+
+    // --- APPLY UPDATE ---
+    // Update if color is different OR if we haven't stamped specific property yet
+    if (currentColor !== targetColor || lastAutoColor !== targetColor) {
       try {
-        const eventObject = calendar.getEventById(item.id);
-        if (eventObject) {
-           eventObject.setColor(targetColor);
-           updatedCount++;
-           console.log(`Updated: "${title}" -> ${targetColor}`);
-        }
+        Calendar.Events.patch({
+          colorId: targetColor,
+          extendedProperties: {
+            private: {
+              last_auto_color: targetColor
+            }
+          }
+        }, 'primary', item.id);
+        
+        updatedCount++;
+        console.log(`Updated: "${title}" -> ${targetColor}`);
       } catch (e) {
-         console.error(`Failed to update "${title}": ${e.message}`);
+        console.error(`Failed to update "${title}": ${e.message}`);
       }
     }
   });
